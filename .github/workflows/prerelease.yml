@@ -28,6 +28,7 @@ concurrency:
     - "Makefile"
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -131,3 +132,13 @@ jobs:
 
         git push origin ":refs/tags/${{ steps.version.outputs.tag }}" || true
         git push origin "${{ steps.version.outputs.tag }}"
+
+    - name: Trigger prerelease build workflow
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        gh workflow run release.yml \
+          --ref "${GITHUB_REF_NAME}" \
+          -f tag="${{ steps.version.outputs.tag }}"
