@@ -43,7 +43,7 @@ jobs:
         ref: ${{ env.RELEASE_TAG }}
 
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
         cache: true
@@ -67,7 +67,7 @@ jobs:
         shasum -a 256 "${OUT}.tar.gz" > "${OUT}.sha256"
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: release-${{ matrix.goarch }}
         path: |
@@ -89,7 +89,7 @@ jobs:
         fetch-depth: 0
 
     - name: Download artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         pattern: release-*
         merge-multiple: true
