@@ -1,0 +1,48 @@
+---
+name: CI
+
+# References:
+# - https://docs.github.com/en/actions/tutorials/build-and-test-code/go
+# - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Display Go version
+      run: go version
+
+    - name: Test
+      run: go test ./...
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Build (cgo)
+      env:
+        CGO_ENABLED: "1"
+      run: |
+        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+        COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+        BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        LDFLAGS="-X github.com/timansky/darwin-exporter/version.Version=${VERSION} \
+        -X github.com/timansky/darwin-exporter/version.Commit=${COMMIT} \
+        -X github.com/timansky/darwin-exporter/version.BuildDate=${BUILD_DATE}"
+        go build -tags cgo -ldflags "${LDFLAGS}" -o darwin-exporter .

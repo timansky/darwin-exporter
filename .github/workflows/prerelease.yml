@@ -1,0 +1,142 @@
+---
+name: Prerelease
+
+run-name: prerelease-${{ github.ref_name }}-${{ github.run_number }}
+
+# References:
+# - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
+# - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+# - https://github.com/softprops/action-gh-release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+'on':
+  workflow_dispatch:
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - "VERSION"
+    - "**.md"
+    - "docs/**"
+    - ".claude/**"
+    - ".github/workflows/ci.yml"
+    - ".github/workflows/release.yml"
+    - ".github/workflows/promote-release.yml"
+    - ".gitignore"
+    - "Makefile"
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Calculate next prerelease tag
+      id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        DEFAULT_MAJOR_MINOR="0.1"
+        BASE_MAJOR_MINOR=""
+
+        if [ -f VERSION ]; then
+          CURRENT_VERSION="$(tr -d '\n' < VERSION)"
+          CURRENT_VERSION="${CURRENT_VERSION%-beta}"
+          if [[ "${CURRENT_VERSION}" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
+            BASE_MAJOR_MINOR="${BASH_REMATCH[1]}"
+          elif [[ "${CURRENT_VERSION}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            BASE_MAJOR_MINOR="${CURRENT_VERSION}"
+          fi
+        fi
+
+        if [ -z "${BASE_MAJOR_MINOR}" ]; then
+          LAST_STABLE_TAG="$(
+            git tag -l 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | head -1 \
+            || true
+          )"
+          if [ -n "${LAST_STABLE_TAG}" ]; then
+            VERSION_ONLY="${LAST_STABLE_TAG#v}"
+            BASE_MAJOR_MINOR="$(echo "${VERSION_ONLY}" | cut -d. -f1-2)"
+          else
+            BASE_MAJOR_MINOR="${DEFAULT_MAJOR_MINOR}"
+          fi
+        fi
+
+        LATEST_TAG="$(git tag -l "v${BASE_MAJOR_MINOR}.*" --sort=-v:refname | head -1 || true)"
+        if [ -z "${LATEST_TAG}" ]; then
+          PATCH=0
+        else
+          PATCH="$(echo "${LATEST_TAG}" | sed "s/^v${BASE_MAJOR_MINOR}\.//" | sed 's/-.*//')"
+          PATCH=$((PATCH + 1))
+        fi
+
+        NEW_VERSION="${BASE_MAJOR_MINOR}.${PATCH}"
+        NEW_TAG="v${NEW_VERSION}-beta"
+
+        echo "version=${NEW_VERSION}" >> "${GITHUB_OUTPUT}"
+        echo "tag=${NEW_TAG}" >> "${GITHUB_OUTPUT}"
+
+    - name: Update VERSION file (if present)
+      id: version_file
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f VERSION ]; then
+          echo "${{ steps.version.outputs.version }}-beta" > VERSION
+          echo "updated=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "updated=false" >> "${GITHUB_OUTPUT}"
+        fi
+
+    - name: Commit version file and tag
+      id: commit
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        HAS_CHANGES="false"
+        if [[ "${{ steps.version_file.outputs.updated }}" == "true" ]]; then
+          git add VERSION
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: bump version to ${{ steps.version.outputs.tag }} [skip ci]"
+            HAS_CHANGES="true"
+          fi
+        fi
+
+        git tag -f "${{ steps.version.outputs.tag }}"
+        echo "has_changes=${HAS_CHANGES}" >> "${GITHUB_OUTPUT}"
+
+    - name: Push commit and tag
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
+          git push origin HEAD:main
+        fi
+
+        git push origin ":refs/tags/${{ steps.version.outputs.tag }}" || true
+        git push origin "${{ steps.version.outputs.tag }}"
+
+    - name: Create GitHub prerelease
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: ${{ steps.version.outputs.tag }}
+        prerelease: true
+        generate_release_notes: true

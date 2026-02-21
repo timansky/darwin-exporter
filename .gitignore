@@ -1,0 +1,38 @@
+# Go binary
+darwin-exporter
+
+# Build artifacts
+*.o
+*.a
+*.so
+dist/
+
+# Test artifacts
+*.test
+*.out
+
+# Coverage
+coverage.txt
+coverage.html
+
+# Go module download cache
+vendor/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Local config (use .example)
+config/darwin-exporter.yml
+
+# Ignore all dot-directories except .github
+.*/
+!.github/
+
+ISSUES.md
+TODO.md
