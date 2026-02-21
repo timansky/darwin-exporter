@@ -38,7 +38,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         ref: ${{ env.RELEASE_TAG }}
 
@@ -82,6 +82,12 @@ jobs:
       contents: write
 
     steps:
+    - name: Checkout tag for release operations
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ env.RELEASE_TAG }}
+        fetch-depth: 0
+
     - name: Download artifacts
       uses: actions/download-artifact@v5
       with:
@@ -90,17 +96,35 @@ jobs:
         path: dist
 
     - name: Create checksums bundle
-      run: cat dist/*.sha256 > dist/sha256sums.txt
+      run: |
+        set -euo pipefail
+        mkdir -p dist
+        shopt -s nullglob
+        CHECKSUM_FILES=(dist/*.sha256)
+        if (( ${#CHECKSUM_FILES[@]} == 0 )); then
+          echo "No checksum files found in dist/. Build artifacts were not downloaded."
+          ls -la dist || true
+          exit 1
+        fi
+        cat "${CHECKSUM_FILES[@]}" > dist/sha256sums.txt
 
     - name: Publish release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
+        shopt -s nullglob
+        TAR_FILES=(dist/*.tar.gz)
+        if (( ${#TAR_FILES[@]} == 0 )); then
+          echo "No release archives found in dist/. Build artifacts were not downloaded."
+          ls -la dist || true
+          exit 1
+        fi
 
         if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
           gh release upload "${RELEASE_TAG}" \
-            dist/*.tar.gz \
+            "${TAR_FILES[@]}" \
             dist/sha256sums.txt#sha256sums.txt \
             --clobber
           exit 0
@@ -115,5 +139,5 @@ jobs:
           --verify-tag \
           --generate-notes \
           "${EXTRA_ARGS[@]}" \
-          dist/*.tar.gz \
+          "${TAR_FILES[@]}" \
           dist/sha256sums.txt#sha256sums.txt

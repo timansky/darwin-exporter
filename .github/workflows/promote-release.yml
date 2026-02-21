@@ -53,7 +53,7 @@ jobs:
         echo "major=${MAJOR_TAG}" >> "${GITHUB_OUTPUT}"
 
     - name: Checkout prerelease tag
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         ref: ${{ steps.tags.outputs.beta }}
         fetch-depth: 0
