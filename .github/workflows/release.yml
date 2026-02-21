@@ -28,15 +28,13 @@ env:
 jobs:
   build:
     name: Build ${{ matrix.goarch }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - runner: macos-13
-          goarch: amd64
-        - runner: macos-14
-          goarch: arm64
+        goarch:
+        - amd64
+        - arm64
 
     steps:
     - name: Checkout
