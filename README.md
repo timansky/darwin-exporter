@@ -98,7 +98,7 @@ Without `-c`, darwin-exporter reads `~/.config/darwin-exporter/config.yml`.
 `darwin-exporter service install` supports two modes:
 
 1. `--type=sudo`: user LaunchAgent + sudoers rule for passwordless `wdutil/ipconfig/powermetrics`
-2. `--type=root`: system LaunchDaemon running as root
+1. `--type=root`: system LaunchDaemon running as root
 
 Service restart policy in launchd: restart on failure (`KeepAlive.SuccessfulExit=false`).
 
@@ -135,13 +135,13 @@ If macOS shows: _"Apple could not verify darwin-exporter..."_, approve the **bin
 plutil -extract ProgramArguments.0 raw ~/Library/LaunchAgents/kz.neko.darwin-exporter.plist
 ```
 
-2. Trigger the security prompt once:
+1. Trigger the security prompt once:
 
 ```bash
 /absolute/path/to/darwin-exporter --help
 ```
 
-3. Approve in `System Settings -> Privacy & Security -> Open Anyway`.
+1. Approve in `System Settings -> Privacy & Security -> Open Anyway`.
 
 Alternative (CLI):
 
@@ -149,7 +149,7 @@ Alternative (CLI):
 xattr -dr com.apple.quarantine /absolute/path/to/darwin-exporter
 ```
 
-4. Restart service:
+1. Restart service:
 
 ```bash
 sudo darwin-exporter service restart --type=sudo
@@ -208,9 +208,9 @@ cp config/config.yml.example ~/.config/darwin-exporter/config.yml
 Override priority:
 
 1. CLI flags
-2. Environment variables
-3. YAML config file
-4. Built-in defaults
+1. Environment variables
+1. YAML config file
+1. Built-in defaults
 
 Examples:
 
@@ -323,9 +323,9 @@ Prebuilt dashboard JSON is provided at:
 Import steps:
 
 1. Open Grafana: `Dashboards` -> `New` -> `Import`.
-2. Upload `docs/grafana/dashboard.json`.
-3. Select your metrics datasource in the `Data Source` variable.
-4. Pick `Instance` and `Disk device` from dashboard variables.
+1. Upload `docs/grafana/dashboard.json`.
+1. Select your metrics datasource in the `Data Source` variable.
+1. Pick `Instance` and `Disk device` from dashboard variables.
 
 Notes:
 

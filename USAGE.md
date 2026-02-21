@@ -60,7 +60,7 @@ Then:
 /absolute/path/to/darwin-exporter --help
 ```
 
-2. Click `Open Anyway` in `System Settings -> Privacy & Security`.
+1. Click `Open Anyway` in `System Settings -> Privacy & Security`.
 
 Or use CLI workaround:
 
@@ -135,9 +135,9 @@ Dashboard file:
 Import:
 
 1. Grafana -> `Dashboards` -> `New` -> `Import`.
-2. Upload `docs/grafana/dashboard.json`.
-3. Select datasource in dashboard variable `Data Source`.
-4. Set `Instance` and `Disk device`.
+1. Upload `docs/grafana/dashboard.json`.
+1. Select datasource in dashboard variable `Data Source`.
+1. Set `Instance` and `Disk device`.
 
 Requirements:
 
