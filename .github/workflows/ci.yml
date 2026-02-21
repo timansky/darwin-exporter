@@ -7,7 +7,15 @@ name: CI
 
 'on':
   push:
+    branches:
+    - main
+    tags-ignore:
+    - "v*"
+    paths-ignore:
+    - "VERSION"
   pull_request:
+    branches:
+    - main
   workflow_dispatch:
 
 permissions:
@@ -15,6 +23,7 @@ permissions:
 
 jobs:
   build-and-test:
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: macos-latest
     steps:
     - name: Checkout

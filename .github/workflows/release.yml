@@ -15,7 +15,7 @@ run-name: release-${{ github.event_name == 'workflow_dispatch' && github.event.i
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing stable tag (for example: v1.2.3)"
+        description: "Existing tag (for example: v1.2.3 or v1.2.3-beta)"
         required: true
         type: string
 
@@ -27,7 +27,6 @@ env:
 
 jobs:
   build:
-    if: ${{ !endsWith(env.RELEASE_TAG, '-beta') }}
     name: Build ${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -78,7 +77,6 @@ jobs:
           darwin-exporter_${{ env.RELEASE_TAG }}_darwin_${{ matrix.goarch }}.sha256
 
   publish:
-    if: ${{ !endsWith(env.RELEASE_TAG, '-beta') }}
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs: build
@@ -100,8 +98,24 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        set -euo pipefail
+
+        if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+          gh release upload "${RELEASE_TAG}" \
+            dist/*.tar.gz \
+            dist/sha256sums.txt#sha256sums.txt \
+            --clobber
+          exit 0
+        fi
+
+        EXTRA_ARGS=()
+        if [[ "${RELEASE_TAG}" == *-beta ]]; then
+          EXTRA_ARGS+=(--prerelease)
+        fi
+
         gh release create "${RELEASE_TAG}" \
           --verify-tag \
           --generate-notes \
+          "${EXTRA_ARGS[@]}" \
           dist/*.tar.gz \
           dist/sha256sums.txt#sha256sums.txt
