@@ -1,0 +1,107 @@
+---
+name: Release Build
+
+run-name: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+# References:
+# - https://docs.github.com/en/actions/tutorials/build-and-test-code/go
+# - https://docs.github.com/en/actions/tutorials/build-and-test-code/rust
+# - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+
+'on':
+  push:
+    tags:
+    - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing stable tag (for example: v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    if: ${{ !endsWith(env.RELEASE_TAG, '-beta') }}
+    name: Build ${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: macos-13
+          goarch: amd64
+        - runner: macos-14
+          goarch: arm64
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+      with:
+        ref: ${{ env.RELEASE_TAG }}
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Build archive
+      env:
+        CGO_ENABLED: "1"
+        GOOS: darwin
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        COMMIT="${GITHUB_SHA::7}"
+        BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        LDFLAGS="-X github.com/timansky/darwin-exporter/version.Version=${RELEASE_TAG} \
+        -X github.com/timansky/darwin-exporter/version.Commit=${COMMIT} \
+        -X github.com/timansky/darwin-exporter/version.BuildDate=${BUILD_DATE} -s -w"
+
+        OUT="darwin-exporter_${RELEASE_TAG}_darwin_${GOARCH}"
+        go build -tags cgo -ldflags "${LDFLAGS}" -o "${OUT}" .
+
+        tar -czf "${OUT}.tar.gz" "${OUT}" LICENSE README.md
+        shasum -a 256 "${OUT}.tar.gz" > "${OUT}.sha256"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ matrix.goarch }}
+        path: |
+          darwin-exporter_${{ env.RELEASE_TAG }}_darwin_${{ matrix.goarch }}.tar.gz
+          darwin-exporter_${{ env.RELEASE_TAG }}_darwin_${{ matrix.goarch }}.sha256
+
+  publish:
+    if: ${{ !endsWith(env.RELEASE_TAG, '-beta') }}
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v5
+      with:
+        pattern: release-*
+        merge-multiple: true
+        path: dist
+
+    - name: Create checksums bundle
+      run: cat dist/*.sha256 > dist/sha256sums.txt
+
+    - name: Publish release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create "${RELEASE_TAG}" \
+          --verify-tag \
+          --generate-notes \
+          dist/*.tar.gz \
+          dist/sha256sums.txt#sha256sums.txt

@@ -1,0 +1,53 @@
+# darwin-exporter configuration example
+# Copy to config.yml and adjust as needed.
+
+server:
+  # Address to listen on. Default: 127.0.0.1:10102 (localhost only)
+  listen_address: "127.0.0.1:10102"
+  # Path for Prometheus metrics endpoint. Default: /metrics
+  metrics_path: "/metrics"
+  # Path for liveness probe. Default: /health
+  health_path: "/health"
+  # Path for readiness probe. Default: /ready
+  ready_path: "/ready"
+  # HTTP read/write timeouts. Default: 30s
+  read_timeout: "30s"
+  write_timeout: "30s"
+
+logging:
+  # Log level: debug, info, warn, error. Default: info
+  level: "info"
+  # Log format: logfmt, json. Default: logfmt
+  format: "logfmt"
+
+# CLI output color mode. Default: auto
+# auto - color only when stdout is a TTY and NO_COLOR is not set
+# always - force ANSI colors
+# never - disable ANSI colors
+color: "auto"
+
+collectors:
+  wifi:
+    # Enable WiFi metrics (system_profiler + CoreWLAN CGo). Default: true
+    enabled: true
+
+  battery:
+    # Enable battery metrics (pmset + ioreg). Default: true
+    enabled: true
+
+  thermal:
+    # Enable thermal pressure + CPU/GPU/Disk temperature metrics. Default: true
+    enabled: true
+
+  wdutil:
+    # Enable advanced WiFi metrics from wdutil (requires root/sudo).
+    # Provides: CCA, NSS, Guard Interval, fault/recovery/link counters
+    # Default: false (requires: darwin-exporter service install --type=sudo)
+    enabled: false
+
+instance:
+  # Machine identifier. Default: read from ~/.instance or hostname.
+  name: ""
+  # Additional labels added to all metrics.
+  labels:
+    environment: "home"
