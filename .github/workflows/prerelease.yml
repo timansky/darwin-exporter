@@ -6,7 +6,6 @@ run-name: prerelease-${{ github.ref_name }}-${{ github.run_number }}
 # References:
 # - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
 # - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
-# - https://github.com/softprops/action-gh-release
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,7 +45,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        DEFAULT_MAJOR_MINOR="0.1"
+        DEFAULT_MAJOR_MINOR="1.0"
         BASE_MAJOR_MINOR=""
 
         if [ -f VERSION ]; then
@@ -127,16 +126,8 @@ jobs:
         set -euo pipefail
 
         if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
-          git push origin HEAD:main
+          git push origin "HEAD:${GITHUB_REF_NAME}"
         fi
 
         git push origin ":refs/tags/${{ steps.version.outputs.tag }}" || true
         git push origin "${{ steps.version.outputs.tag }}"
-
-    - name: Create GitHub prerelease
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: ${{ steps.version.outputs.tag }}
-        prerelease: true
-        generate_release_notes: true
