@@ -14,9 +14,12 @@ name: CI
     - "v*"
     paths-ignore:
     - "VERSION"
+    - ".github/workflows/**"
   pull_request:
     branches:
     - main
+    paths-ignore:
+    - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -56,6 +59,7 @@ jobs:
       env:
         CGO_ENABLED: "1"
       run: |
+        set -euo pipefail
         VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
         COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
         BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -63,3 +67,30 @@ jobs:
         -X github.com/timansky/darwin-exporter/version.Commit=${COMMIT} \
         -X github.com/timansky/darwin-exporter/version.BuildDate=${BUILD_DATE}"
         go build -tags cgo -ldflags "${LDFLAGS}" -o darwin-exporter .
+
+    - name: Package CI artifacts
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+        GOARCH=$(go env GOARCH)
+
+        BIN_OUT="darwin-exporter_${VERSION}_darwin_${GOARCH}"
+        cp darwin-exporter "${BIN_OUT}"
+        tar -czf "${BIN_OUT}.tar.gz" "${BIN_OUT}" LICENSE README.md
+        shasum -a 256 "${BIN_OUT}.tar.gz" > "${BIN_OUT}.sha256"
+
+        DASH_OUT="darwin-exporter_dashboard_${VERSION}.json"
+        cp docs/grafana/dashboard.json "${DASH_OUT}"
+        shasum -a 256 "${DASH_OUT}" > "${DASH_OUT}.sha256"
+
+    - name: Upload CI artifacts
+      uses: actions/upload-artifact@v6
+      with:
+        name: ci-${{ github.event_name }}-${{ github.run_number }}
+        retention-days: 14
+        path: |
+          darwin-exporter_*.tar.gz
+          darwin-exporter_*.sha256
+          darwin-exporter_dashboard_*.json
+          darwin-exporter_dashboard_*.json.sha256

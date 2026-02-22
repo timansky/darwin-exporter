@@ -61,6 +61,19 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	}
 	r.mu.Unlock()
 
+	errorDesc := prometheus.NewDesc(
+		"darwin_collector_error",
+		"Indicates that the named collector returned an error.",
+		[]string{"collector"},
+		nil,
+	)
+	upDesc := prometheus.NewDesc(
+		"darwin_collector_up",
+		"1 if the named collector update succeeded in this scrape, 0 otherwise.",
+		[]string{"collector"},
+		nil,
+	)
+
 	var wg sync.WaitGroup
 	for name, c := range collectors {
 		wg.Add(1)
@@ -73,29 +86,23 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 						WithField("panic", rec).
 						Errorf("collector panicked; stack:\n%s", stack)
 					ch <- prometheus.NewInvalidMetric(
-						prometheus.NewDesc(
-							"darwin_collector_error",
-							"Indicates that the named collector returned an error.",
-							[]string{"collector"},
-							nil,
-						),
+						errorDesc,
 						fmt.Errorf("collector %s panicked: %v", name, rec),
 					)
+					ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 0, name)
 				}
 			}()
 			if err := c.Update(ch); err != nil {
 				r.log.WithField("collector", name).WithError(err).Warn("collector update failed")
 				// Record scrape error as a metric.
 				ch <- prometheus.NewInvalidMetric(
-					prometheus.NewDesc(
-						"darwin_collector_error",
-						"Indicates that the named collector returned an error.",
-						[]string{"collector"},
-						nil,
-					),
+					errorDesc,
 					fmt.Errorf("collector %s: %w", name, err),
 				)
+				ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 0, name)
+				return
 			}
+			ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 1, name)
 		}(name, c)
 	}
 	wg.Wait()

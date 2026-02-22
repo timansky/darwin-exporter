@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,6 +49,27 @@ func descContains(m prometheus.Metric, substr string) bool {
 	return strings.Contains(m.Desc().String(), substr)
 }
 
+func metricGaugeValue(m prometheus.Metric) (float64, bool) {
+	var pm dto.Metric
+	if err := m.Write(&pm); err != nil || pm.GetGauge() == nil {
+		return 0, false
+	}
+	return pm.GetGauge().GetValue(), true
+}
+
+func metricLabelValue(m prometheus.Metric, label string) (string, bool) {
+	var pm dto.Metric
+	if err := m.Write(&pm); err != nil {
+		return "", false
+	}
+	for _, lp := range pm.GetLabel() {
+		if lp.GetName() == label {
+			return lp.GetValue(), true
+		}
+	}
+	return "", false
+}
+
 func newTestRegistry() *Registry {
 	log := logrus.New()
 	log.SetLevel(logrus.ErrorLevel)
@@ -80,8 +102,8 @@ func TestRegistry_Collect_NoError(t *testing.T) {
 	for m := range ch {
 		collected = append(collected, m)
 	}
-	if len(collected) != 1 {
-		t.Errorf("expected 1 metric, got %d", len(collected))
+	if len(collected) != 2 {
+		t.Errorf("expected 2 metrics (collector + collector_up), got %d", len(collected))
 	}
 }
 
@@ -97,9 +119,9 @@ func TestRegistry_Collect_WithError(t *testing.T) {
 	for m := range ch {
 		collected = append(collected, m)
 	}
-	// Should receive one invalid metric for the error.
-	if len(collected) != 1 {
-		t.Errorf("expected 1 error metric, got %d", len(collected))
+	// Should receive error metric + collector_up=0.
+	if len(collected) != 2 {
+		t.Errorf("expected 2 metrics (error + collector_up), got %d", len(collected))
 	}
 }
 
@@ -129,8 +151,8 @@ func TestRegistry_MultipleCollectors(t *testing.T) {
 	for range ch {
 		count++
 	}
-	if count != 2 {
-		t.Errorf("expected 2 metrics, got %d", count)
+	if count != 4 {
+		t.Errorf("expected 4 metrics (2 collector + 2 collector_up), got %d", count)
 	}
 }
 
@@ -238,5 +260,38 @@ func TestRegistry_Collect_ErrorMetricOnUpdate(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected darwin_collector_error metric when collector returns error")
+	}
+}
+
+func TestRegistry_Collect_CollectorUpMetric(t *testing.T) {
+	r := newTestRegistry()
+	g := prometheus.NewGauge(prometheus.GaugeOpts{Name: "darwin_ok", Help: "ok"})
+	g.Set(1)
+	r.Register("ok", &mockCollector{metrics: []prometheus.Metric{g}})
+	r.Register("bad", &mockCollector{err: fmt.Errorf("boom")})
+
+	metrics := collectMetrics(r)
+
+	got := map[string]float64{}
+	for _, m := range metrics {
+		if !descContains(m, "darwin_collector_up") {
+			continue
+		}
+		collectorName, ok := metricLabelValue(m, "collector")
+		if !ok {
+			t.Fatal("collector_up metric missing collector label")
+		}
+		v, ok := metricGaugeValue(m)
+		if !ok {
+			t.Fatal("collector_up metric is not a gauge")
+		}
+		got[collectorName] = v
+	}
+
+	if got["ok"] != 1 {
+		t.Fatalf("expected collector_up=1 for ok collector, got %v", got["ok"])
+	}
+	if got["bad"] != 0 {
+		t.Fatalf("expected collector_up=0 for bad collector, got %v", got["bad"])
 	}
 }

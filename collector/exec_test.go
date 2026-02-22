@@ -57,3 +57,30 @@ func TestRunCommand_NotFound(t *testing.T) {
 		t.Error("expected error for missing binary, got nil")
 	}
 }
+
+func TestCommandTimeout_ByCommand(t *testing.T) {
+	cases := []struct {
+		name    string
+		cmd     string
+		args    []string
+		timeout time.Duration
+	}{
+		{name: "default", cmd: "echo", timeout: defaultCommandTimeout},
+		{name: "powermetrics", cmd: "powermetrics", timeout: powermetricsCommandTimeout},
+		{name: "system_profiler", cmd: "system_profiler", timeout: systemProfilerTimeout},
+		{name: "wdutil", cmd: "wdutil", timeout: wdutilCommandTimeout},
+		{name: "ioreg", cmd: "ioreg", timeout: ioregCommandTimeout},
+		{name: "notifyutil", cmd: "notifyutil", timeout: quickCommandTimeout},
+		{name: "sudo wdutil", cmd: "sudo", args: []string{"-n", "/usr/bin/wdutil", "info"}, timeout: wdutilCommandTimeout},
+		{name: "sudo powermetrics", cmd: "sudo", args: []string{"-n", "/usr/bin/powermetrics", "-n", "1"}, timeout: powermetricsCommandTimeout},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := commandTimeout(tc.cmd, tc.args...)
+			if got != tc.timeout {
+				t.Fatalf("commandTimeout(%q, %v)=%s, want %s", tc.cmd, tc.args, got, tc.timeout)
+			}
+		})
+	}
+}

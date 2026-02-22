@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -44,6 +45,8 @@ type Server struct {
 	log      *logrus.Logger
 	registry *prometheus.Registry
 	httpSrv  *http.Server
+
+	shuttingDown atomic.Bool
 }
 
 // New creates a Server ready to serve metrics.
@@ -85,6 +88,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
 }
 
+// SetShuttingDown updates readiness mode: true makes /ready return 503.
+func (s *Server) SetShuttingDown(v bool) {
+	s.shuttingDown.Store(v)
+}
+
+// IsShuttingDown reports current readiness drain mode.
+func (s *Server) IsShuttingDown() bool {
+	return s.shuttingDown.Load()
+}
+
 // metricsHandler returns the Prometheus metrics handler.
 func (s *Server) metricsHandler() http.Handler {
 	return promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{
@@ -109,6 +122,18 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 // readyHandler responds to readiness probes.
 func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if s.shuttingDown.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		resp := healthResponse{
+			Status:  "shutting_down",
+			Version: version.Version,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			s.log.WithError(err).Warn("failed to encode ready response")
+		}
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	resp := healthResponse{
 		Status:  "ready",

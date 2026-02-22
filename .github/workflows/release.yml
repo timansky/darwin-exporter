@@ -1,7 +1,7 @@
 ---
 name: Release Build
 
-run-name: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+run-name: release-${{ github.event.inputs.tag }}
 
 # References:
 # - https://docs.github.com/en/actions/tutorials/build-and-test-code/go
@@ -9,9 +9,6 @@ run-name: release-${{ github.event_name == 'workflow_dispatch' && github.event.i
 # - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 
 'on':
-  push:
-    tags:
-    - "v*"
   workflow_dispatch:
     inputs:
       tag:
@@ -23,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ github.event.inputs.tag }}
 
 jobs:
   build:
@@ -159,7 +156,19 @@ jobs:
           exit 1
         fi
 
+        IS_PRERELEASE=false
+        if [[ "${RELEASE_TAG}" == *-beta ]]; then
+          IS_PRERELEASE=true
+        fi
+
         if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+          RELEASE_ID="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" --jq '.id')"
+          PATCH_PAYLOAD="$(jq -n --argjson prerelease "${IS_PRERELEASE}" '{draft: false, prerelease: $prerelease}')"
+          gh api \
+            --method PATCH \
+            "repos/${GH_REPO}/releases/${RELEASE_ID}" \
+            --input - <<< "${PATCH_PAYLOAD}" >/dev/null
+
           gh release upload "${RELEASE_TAG}" \
             "${TAR_FILES[@]}" \
             "${DASHBOARD_FILES[@]}" \
@@ -169,7 +178,7 @@ jobs:
         fi
 
         EXTRA_ARGS=()
-        if [[ "${RELEASE_TAG}" == *-beta ]]; then
+        if [[ "${IS_PRERELEASE}" == "true" ]]; then
           EXTRA_ARGS+=(--prerelease)
         fi
 

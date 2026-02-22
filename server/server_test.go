@@ -76,6 +76,27 @@ func TestReadyHandler(t *testing.T) {
 	}
 }
 
+func TestReadyHandler_ShuttingDown(t *testing.T) {
+	s := newTestServer(t)
+	s.SetShuttingDown(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rec := httptest.NewRecorder()
+	s.readyHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", rec.Code)
+	}
+
+	var resp healthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding ready response: %v", err)
+	}
+	if resp.Status != "shutting_down" {
+		t.Errorf("expected status=shutting_down, got %q", resp.Status)
+	}
+}
+
 func TestLandingHandler(t *testing.T) {
 	s := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

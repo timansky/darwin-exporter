@@ -25,6 +25,11 @@ import (
 	"github.com/timansky/darwin-exporter/version"
 )
 
+const (
+	readinessDrainDelay = 5 * time.Second
+	shutdownTimeout     = 10 * time.Second
+)
+
 type cliApp struct {
 	configFile   *string
 	cliFlags     *config.CLIFlags
@@ -489,6 +494,7 @@ func runExporter(configFile string, cliFlags *config.CLIFlags) {
 	// Handle shutdown signals.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(quit)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
@@ -503,7 +509,15 @@ func runExporter(configFile string, cliFlags *config.CLIFlags) {
 	<-quit
 	log.Info("received shutdown signal")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Start readiness drain before graceful shutdown so upstream load balancers
+	// can stop routing traffic to this instance.
+	srv.SetShuttingDown(true)
+	if readinessDrainDelay > 0 {
+		log.WithField("delay", readinessDrainDelay).Info("waiting for readiness drain")
+		time.Sleep(readinessDrainDelay)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
