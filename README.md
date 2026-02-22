@@ -74,6 +74,9 @@ make install          # installs to ~/.local/bin/darwin-exporter
 make install-service  # installs and starts launchd service (sudo mode)
 ```
 
+`make build`/`make run` use dev build version by default (`vX.Y.Z-dev`).
+Use `make release` (or `make build RELEASE=1`) for release build version (`vX.Y.Z`).
+
 ### With `go install`
 
 ```bash

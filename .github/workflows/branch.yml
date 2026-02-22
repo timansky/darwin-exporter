@@ -82,7 +82,7 @@ jobs:
             DEV_VERSION="v1.0.0-dev"
           fi
         else
-          echo "version/version.go Version must be semver-dev (example: v1.0.2-dev). Got: ${SOURCE_VERSION}"
+          echo "version/version.go Version must be semver or semver-dev (ex: v1.0.2|v1.0.2-dev). Got: ${SOURCE_VERSION}"
           exit 1
         fi
 

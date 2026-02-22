@@ -129,7 +129,7 @@ jobs:
         # Remove leftover beta tag if it still exists.
         git push origin ":refs/tags/${BETA_TAG}" || true
 
-    - name: Set next dev version and push to main
+    - name: Bump next patch version and push to main
       if: ${{ steps.tags.outputs.should_promote == 'true' }}
       shell: bash
       run: |
@@ -145,21 +145,21 @@ jobs:
         MAJOR="${BASH_REMATCH[1]}"
         MINOR="${BASH_REMATCH[2]}"
         PATCH="${BASH_REMATCH[3]}"
-        NEXT_DEV="v${MAJOR}.${MINOR}.$((PATCH + 1))-dev"
+        NEXT_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
 
         git fetch origin main --force
         git checkout -B main origin/main
 
-        sed -i -E "s|^([[:space:]]*Version[[:space:]]*=[[:space:]]*\").*(\")$|\1${NEXT_DEV}\2|" version/version.go
+        sed -i -E "s|^([[:space:]]*Version[[:space:]]*=[[:space:]]*\").*(\")$|\1${NEXT_VERSION}\2|" version/version.go
 
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         git add version/version.go
         if git diff --cached --quiet; then
-          echo "version/version.go already has next dev version: ${NEXT_DEV}"
+          echo "version/version.go already has next version: ${NEXT_VERSION}"
           exit 0
         fi
 
-        git commit -m "chore: set next dev version ${NEXT_DEV} [skip ci]"
+        git commit -m "chore: bump version to ${NEXT_VERSION} [skip ci]"
         git push origin HEAD:main

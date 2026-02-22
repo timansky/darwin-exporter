@@ -1,12 +1,18 @@
 BINARY    := darwin-exporter
 MODULE    := github.com/timansky/darwin-exporter
-VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+RELEASE   ?= 0
+SOURCE_VERSION_RAW := $(strip $(shell sed -nE 's/^[[:space:]]*Version[[:space:]]*=[[:space:]]*"([^"]+)".*$$/\1/p' version/version.go | head -1))
+SOURCE_VERSION := $(if $(SOURCE_VERSION_RAW),$(SOURCE_VERSION_RAW),v0.0.0)
+SOURCE_VERSION_NO_V := $(patsubst v%,%,$(SOURCE_VERSION))
+REL_VERSION := v$(patsubst %-dev,%,$(SOURCE_VERSION_NO_V))
+DEV_VERSION := $(if $(findstring -dev,$(SOURCE_VERSION_NO_V)),v$(SOURCE_VERSION_NO_V),v$(SOURCE_VERSION_NO_V)-dev)
+VERSION = $(if $(filter 1 true,$(RELEASE)),$(REL_VERSION),$(DEV_VERSION))
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-LDFLAGS := -X $(MODULE)/version.Version=$(VERSION) \
-           -X $(MODULE)/version.Commit=$(COMMIT) \
-           -X $(MODULE)/version.BuildDate=$(BUILD_DATE)
+LDFLAGS = -X $(MODULE)/version.Version=$(VERSION) \
+          -X $(MODULE)/version.Commit=$(COMMIT) \
+          -X $(MODULE)/version.BuildDate=$(BUILD_DATE)
 
 GO      := go
 GOFLAGS :=
@@ -105,17 +111,18 @@ install-completion-zsh: build
 
 ## install-service: Install launchd service (LaunchAgent + sudoers for wdutil)
 install-service: install
-	sudo ~/.local/bin/$(BINARY) service install --type=sudo
+	sudo ~/.local/bin/$(BINARY) service install
 
 ## uninstall-service: Stop and remove launchd service
 uninstall-service:
-	sudo ~/.local/bin/$(BINARY) service uninstall --type=sudo
+	sudo ~/.local/bin/$(BINARY) service uninstall
 
 ## version: Print version information
 version:
 	@echo "darwin-exporter $(VERSION) commit=$(COMMIT) built=$(BUILD_DATE)"
 
 ## release: Build stripped release binary
+release: RELEASE=1
 release:
 	CGO_ENABLED=1 $(GO) build $(GOFLAGS) -tags cgo \
 		-ldflags "$(LDFLAGS) -s -w" \
