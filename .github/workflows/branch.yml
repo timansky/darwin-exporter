@@ -57,27 +57,35 @@ jobs:
       run: |
         set -euo pipefail
 
-        if [ ! -f VERSION ]; then
-          echo "VERSION file is required"
+        SOURCE_VERSION="$(
+          sed -nE 's/^[[:space:]]*Version[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' version/version.go \
+          | head -1
+        )"
+        SOURCE_VERSION="${SOURCE_VERSION#v}"
+
+        if [[ "${SOURCE_VERSION}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]]; then
+          DEV_VERSION="v${BASH_REMATCH[1]}-dev"
+        elif [[ "${SOURCE_VERSION}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          DEV_VERSION="v${BASH_REMATCH[1]}-dev"
+        elif [[ -z "${SOURCE_VERSION}" || "${SOURCE_VERSION}" == "dev" ]]; then
+          LAST_STABLE_TAG="$(
+            git tag -l 'v*' --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | head -1 \
+            || true
+          )"
+          if [ -n "${LAST_STABLE_TAG}" ]; then
+            STABLE_VERSION="${LAST_STABLE_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${STABLE_VERSION}"
+            DEV_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))-dev"
+          else
+            DEV_VERSION="v1.0.0-dev"
+          fi
+        else
+          echo "version/version.go Version must be semver-dev (example: v1.0.2-dev). Got: ${SOURCE_VERSION}"
           exit 1
         fi
 
-        VERSION_RAW="$(tr -d '\n' < VERSION)"
-        VERSION_RAW="${VERSION_RAW#v}"
-        VERSION_BASE="${VERSION_RAW%-beta}"
-        VERSION_BASE="${VERSION_BASE%-dev}"
-
-        if [[ ! "${VERSION_BASE}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-          echo "VERSION must be semver (example: 1.2.3 or 1.2.3-beta). Got: ${VERSION_RAW}"
-          exit 1
-        fi
-
-        MAJOR="${BASH_REMATCH[1]}"
-        MINOR="${BASH_REMATCH[2]}"
-        PATCH="${BASH_REMATCH[3]}"
-        NEXT_PATCH=$((PATCH + 1))
-
-        DEV_VERSION="v${MAJOR}.${MINOR}.${NEXT_PATCH}-dev"
         echo "version=${DEV_VERSION}" >> "${GITHUB_OUTPUT}"
 
     - name: Build (cgo)
@@ -124,7 +132,7 @@ jobs:
           darwin-exporter_dashboard_*.json.sha256
 
   prerelease:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]') }}
     needs:
     - build-and-test
     permissions:
@@ -165,10 +173,9 @@ jobs:
         GOOS: darwin
         GOARCH: ${{ matrix.goarch }}
       run: |
-        COMMIT="${GITHUB_SHA::7}"
+        COMMIT="$(git rev-parse --short HEAD)"
         BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        LDFLAGS="-X github.com/timansky/darwin-exporter/version.Version=${RELEASE_VERSION} \
-        -X github.com/timansky/darwin-exporter/version.Commit=${COMMIT} \
+        LDFLAGS="-X github.com/timansky/darwin-exporter/version.Commit=${COMMIT} \
         -X github.com/timansky/darwin-exporter/version.BuildDate=${BUILD_DATE} -s -w"
 
         OUT="darwin-exporter_${RELEASE_VERSION}_darwin_${GOARCH}"
@@ -260,3 +267,52 @@ jobs:
           dist/*.tar.gz
           dist/darwin-exporter_dashboard_*.json
           dist/sha256sums.txt
+
+  prerelease-push-main:
+    if: ${{ needs.prerelease.outputs.tag != '' && needs.prerelease.outputs.commit_created == 'true' }}
+    needs:
+    - prerelease
+    - prerelease-publish
+    name: Push release commit to main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v6
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Push prepared release commit
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        TARGET_SHA="${{ needs.prerelease.outputs.commit_sha }}"
+        if [ -z "${TARGET_SHA}" ]; then
+          echo "Empty commit sha from prerelease workflow"
+          exit 1
+        fi
+
+        git fetch origin main --force
+        git fetch --tags --force origin
+
+        if ! git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+          echo "Release commit ${TARGET_SHA} is not available locally"
+          exit 1
+        fi
+
+        if git merge-base --is-ancestor "${TARGET_SHA}" "origin/main"; then
+          echo "Release commit already present in main: ${TARGET_SHA}"
+          exit 0
+        fi
+
+        if ! git merge-base --is-ancestor "origin/main" "${TARGET_SHA}"; then
+          echo "Release commit ${TARGET_SHA} is not a fast-forward from origin/main"
+          echo "Main advanced concurrently. Re-run workflow."
+          exit 1
+        fi
+
+        git push origin "${TARGET_SHA}:refs/heads/main"

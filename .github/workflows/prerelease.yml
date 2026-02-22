@@ -16,6 +16,12 @@ concurrency:
       tag:
         description: "Generated prerelease tag"
         value: ${{ jobs.prerelease.outputs.tag }}
+      commit_sha:
+        description: "Release commit sha (tag target)"
+        value: ${{ jobs.prerelease.outputs.commit_sha }}
+      commit_created:
+        description: "Whether release commit was created"
+        value: ${{ jobs.prerelease.outputs.commit_created }}
   workflow_dispatch:
 
 permissions:
@@ -27,29 +33,38 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      commit_sha: ${{ steps.commit_tag.outputs.commit_sha }}
+      commit_created: ${{ steps.commit_tag.outputs.commit_created }}
     steps:
     - name: Checkout
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
-    - name: Resolve prerelease tag from VERSION
+    - name: Resolve prerelease tag from version/version.go
       id: version
       shell: bash
       run: |
         set -euo pipefail
 
-        if [ ! -f VERSION ]; then
-          echo "VERSION file is required"
+        SOURCE_VERSION="$(
+          sed -nE 's/^[[:space:]]*Version[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' version/version.go \
+          | head -1
+        )"
+        SOURCE_VERSION="${SOURCE_VERSION#v}"
+        SOURCE_VERSION="${SOURCE_VERSION%-beta}"
+
+        if [[ "${SOURCE_VERSION}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]]; then
+          VERSION="${BASH_REMATCH[1]}"
+        elif [[ "${SOURCE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          VERSION="${SOURCE_VERSION}"
+        else
+          echo "version/version.go Version must be semver-dev (example: v1.0.2-dev). Got: ${SOURCE_VERSION}"
           exit 1
         fi
 
-        VERSION_RAW="$(tr -d '\n' < VERSION)"
-        VERSION_RAW="${VERSION_RAW#v}"
-        VERSION="${VERSION_RAW%-beta}"
-
         if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "VERSION must be semver (example: 1.2.3 or 1.2.3-beta). Got: ${VERSION_RAW}"
+          echo "Resolved prerelease version must be semver (example: 1.2.3). Got: ${VERSION}"
           exit 1
         fi
 
@@ -57,10 +72,31 @@ jobs:
         echo "tag=v${VERSION}-beta" >> "${GITHUB_OUTPUT}"
 
     - name: Push prerelease tag
+      id: commit_tag
       shell: bash
       run: |
         set -euo pipefail
 
-        git tag -f "${{ steps.version.outputs.tag }}"
-        git push origin ":refs/tags/${{ steps.version.outputs.tag }}" || true
-        git push origin "${{ steps.version.outputs.tag }}"
+        RELEASE_VERSION="${{ steps.version.outputs.version }}"
+        RELEASE_TAG="${{ steps.version.outputs.tag }}"
+
+        sed -i -E "s|^([[:space:]]*Version[[:space:]]*=[[:space:]]*\").*(\")$|\1v${RELEASE_VERSION}\2|" version/version.go
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git add version/version.go
+        COMMIT_CREATED="false"
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: set release version v${RELEASE_VERSION} [skip ci]"
+          COMMIT_CREATED="true"
+        fi
+
+        TARGET_SHA="$(git rev-parse HEAD)"
+        git tag -f "${RELEASE_TAG}" "${TARGET_SHA}"
+
+        echo "commit_created=${COMMIT_CREATED}" >> "${GITHUB_OUTPUT}"
+        echo "commit_sha=${TARGET_SHA}" >> "${GITHUB_OUTPUT}"
+
+        git push origin ":refs/tags/${RELEASE_TAG}" || true
+        git push origin "${RELEASE_TAG}"

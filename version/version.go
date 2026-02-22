@@ -3,7 +3,7 @@ package version
 
 // Variables set by ldflags at build time.
 var (
-	Version   = "dev"
+	Version   = "v1.0.3-dev"
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )
