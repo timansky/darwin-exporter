@@ -22,7 +22,6 @@ concurrency:
       commit_created:
         description: "Whether release commit was created"
         value: ${{ jobs.prerelease.outputs.commit_created }}
-  workflow_dispatch:
 
 permissions:
   contents: write
