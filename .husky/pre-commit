@@ -5,7 +5,9 @@ echo "Running markdownlint and golangci-lint..."
 make lint
 
 echo "Running yamllint..."
-yamllint -c .yamllint .
+if git ls-files -- "*.yml" "*.yaml" | grep -q .; then
+  git ls-files -- "*.yml" "*.yaml" | xargs yamllint -c .yamllint
+fi
 
 echo "Running go vet..."
 go vet ./...
