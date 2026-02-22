@@ -3,161 +3,60 @@ name: Prerelease
 
 run-name: prerelease-${{ github.ref_name }}-${{ github.run_number }}
 
-# References:
-# - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
-# - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 'on':
+  workflow_call:
+    outputs:
+      tag:
+        description: "Generated prerelease tag"
+        value: ${{ jobs.prerelease.outputs.tag }}
   workflow_dispatch:
-  push:
-    branches:
-    - main
-    # Run prerelease only for release-relevant changes.
-    # Everything else on main is ignored.
-    paths:
-    - "VERSION"
-    - "go.mod"
-    - "go.sum"
-    - "**/*.go"
-    - "docs/grafana/dashboard.json"
 
 permissions:
-  actions: write
   contents: write
 
 jobs:
   prerelease:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
     - name: Checkout
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
-    - name: Calculate next prerelease tag
+    - name: Resolve prerelease tag from VERSION
       id: version
       shell: bash
       run: |
         set -euo pipefail
 
-        DEFAULT_MAJOR_MINOR="1.0"
-        BASE_MAJOR_MINOR=""
-
-        if [ -f VERSION ]; then
-          CURRENT_VERSION="$(tr -d '\n' < VERSION)"
-          CURRENT_VERSION="${CURRENT_VERSION%-beta}"
-          if [[ "${CURRENT_VERSION}" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
-            BASE_MAJOR_MINOR="${BASH_REMATCH[1]}"
-          elif [[ "${CURRENT_VERSION}" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            BASE_MAJOR_MINOR="${CURRENT_VERSION}"
-          fi
+        if [ ! -f VERSION ]; then
+          echo "VERSION file is required"
+          exit 1
         fi
 
-        if [ -z "${BASE_MAJOR_MINOR}" ]; then
-          LAST_STABLE_TAG="$(
-            git tag -l 'v*' --sort=-v:refname \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-            | head -1 \
-            || true
-          )"
-          if [ -n "${LAST_STABLE_TAG}" ]; then
-            VERSION_ONLY="${LAST_STABLE_TAG#v}"
-            BASE_MAJOR_MINOR="$(echo "${VERSION_ONLY}" | cut -d. -f1-2)"
-          else
-            BASE_MAJOR_MINOR="${DEFAULT_MAJOR_MINOR}"
-          fi
+        VERSION_RAW="$(tr -d '\n' < VERSION)"
+        VERSION_RAW="${VERSION_RAW#v}"
+        VERSION="${VERSION_RAW%-beta}"
+
+        if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "VERSION must be semver (example: 1.2.3 or 1.2.3-beta). Got: ${VERSION_RAW}"
+          exit 1
         fi
 
-        CURRENT_BETA_TAG="$(git tag -l "v${BASE_MAJOR_MINOR}.*-beta" --sort=-v:refname | head -1 || true)"
-        if [ -n "${CURRENT_BETA_TAG}" ]; then
-          CURRENT_STABLE_TAG="${CURRENT_BETA_TAG%-beta}"
-          if git rev-parse -q --verify "refs/tags/${CURRENT_STABLE_TAG}" >/dev/null; then
-            CURRENT_BETA_TAG=""
-          fi
-        fi
+        echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+        echo "tag=v${VERSION}-beta" >> "${GITHUB_OUTPUT}"
 
-        if [ -n "${CURRENT_BETA_TAG}" ]; then
-          NEW_TAG="${CURRENT_BETA_TAG}"
-          NEW_VERSION="${NEW_TAG#v}"
-          NEW_VERSION="${NEW_VERSION%-beta}"
-        else
-          LATEST_STABLE_TAG="$(
-            git tag -l "v${BASE_MAJOR_MINOR}.*" --sort=-v:refname \
-            | grep -E '^[^-]+$' \
-            | head -1 \
-            || true
-          )"
-
-          if [ -z "${LATEST_STABLE_TAG}" ]; then
-            PATCH=0
-          else
-            VERSION_NO_PREFIX="${LATEST_STABLE_TAG#v}"
-            PATCH="${VERSION_NO_PREFIX##*.}"
-            PATCH=$((PATCH + 1))
-          fi
-
-          NEW_VERSION="${BASE_MAJOR_MINOR}.${PATCH}"
-          NEW_TAG="v${NEW_VERSION}-beta"
-        fi
-
-        echo "version=${NEW_VERSION}" >> "${GITHUB_OUTPUT}"
-        echo "tag=${NEW_TAG}" >> "${GITHUB_OUTPUT}"
-
-    - name: Update VERSION file (if present)
-      id: version_file
+    - name: Push prerelease tag
       shell: bash
       run: |
         set -euo pipefail
-        if [ -f VERSION ]; then
-          echo "${{ steps.version.outputs.version }}-beta" > VERSION
-          echo "updated=true" >> "${GITHUB_OUTPUT}"
-        else
-          echo "updated=false" >> "${GITHUB_OUTPUT}"
-        fi
-
-    - name: Commit version file and tag
-      id: commit
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-
-        HAS_CHANGES="false"
-        if [[ "${{ steps.version_file.outputs.updated }}" == "true" ]]; then
-          git add VERSION
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: bump version to ${{ steps.version.outputs.tag }} [skip ci]"
-            HAS_CHANGES="true"
-          fi
-        fi
 
         git tag -f "${{ steps.version.outputs.tag }}"
-        echo "has_changes=${HAS_CHANGES}" >> "${GITHUB_OUTPUT}"
-
-    - name: Push commit and tag
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-        fi
-
         git push origin ":refs/tags/${{ steps.version.outputs.tag }}" || true
         git push origin "${{ steps.version.outputs.tag }}"
-
-    - name: Trigger prerelease build workflow
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        gh workflow run release.yml \
-          --ref "${GITHUB_REF_NAME}" \
-          -f tag="${{ steps.version.outputs.tag }}"
