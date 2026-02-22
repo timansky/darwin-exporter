@@ -28,7 +28,7 @@ func defaultConfig() *Config {
 				Enabled: true,
 			},
 			Wdutil: WdutilCollectorConfig{
-				Enabled: false,
+				Enabled: true,
 			},
 		},
 		Instance: InstanceConfig{

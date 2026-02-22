@@ -113,11 +113,16 @@ jobs:
         BIN_OUT="darwin-exporter_${VERSION}_darwin_${GOARCH}"
         cp darwin-exporter "${BIN_OUT}"
         tar -czf "${BIN_OUT}.tar.gz" "${BIN_OUT}" LICENSE README.md
-        shasum -a 256 "${BIN_OUT}.tar.gz" > "${BIN_OUT}.sha256"
 
         DASH_OUT="darwin-exporter_dashboard_${VERSION}.json"
         cp docs/grafana/dashboard.json "${DASH_OUT}"
-        shasum -a 256 "${DASH_OUT}" > "${DASH_OUT}.sha256"
+
+        # GNU-compatible checksum manifest: "<sha256><two spaces><filename>".
+        mapfile -t checksum_files < <(printf '%s\n' "${BIN_OUT}.tar.gz" "${DASH_OUT}" | LC_ALL=C sort)
+        : > SHA256SUMS
+        for f in "${checksum_files[@]}"; do
+          shasum -a 256 "${f}" >> SHA256SUMS
+        done
 
     - name: Upload CI artifacts
       if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
@@ -127,9 +132,8 @@ jobs:
         retention-days: 14
         path: |
           darwin-exporter_*.tar.gz
-          darwin-exporter_*.sha256
           darwin-exporter_dashboard_*.json
-          darwin-exporter_dashboard_*.json.sha256
+          SHA256SUMS
 
   prerelease:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]') }}
@@ -182,7 +186,6 @@ jobs:
         go build -tags cgo -ldflags "${LDFLAGS}" -o "${OUT}" .
 
         tar -czf "${OUT}.tar.gz" "${OUT}" LICENSE README.md
-        shasum -a 256 "${OUT}.tar.gz" > "${OUT}.sha256"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v6
@@ -190,7 +193,6 @@ jobs:
         name: prerelease-${{ matrix.goarch }}
         path: |
           darwin-exporter_${{ env.RELEASE_VERSION }}_darwin_${{ matrix.goarch }}.tar.gz
-          darwin-exporter_${{ env.RELEASE_VERSION }}_darwin_${{ matrix.goarch }}.sha256
 
   prerelease-dashboard:
     if: ${{ needs.prerelease.outputs.tag != '' }}
@@ -217,7 +219,6 @@ jobs:
           | .description = ((.description // "") | gsub(" \\| release [^|]+$"; "") + " | release " + $tag)
           | .tags = (((.tags // []) | map(select(startswith("release:") | not))) + ["release:" + $tag])
         ' docs/grafana/dashboard.json > "${OUT}"
-        shasum -a 256 "${OUT}" > "${OUT}.sha256"
 
     - name: Upload dashboard artifact
       uses: actions/upload-artifact@v6
@@ -225,7 +226,6 @@ jobs:
         name: prerelease-dashboard
         path: |
           darwin-exporter_dashboard_${{ env.RELEASE_VERSION }}.json
-          darwin-exporter_dashboard_${{ env.RELEASE_VERSION }}.json.sha256
 
   prerelease-publish:
     if: ${{ needs.prerelease.outputs.tag != '' }}
@@ -248,11 +248,22 @@ jobs:
         merge-multiple: true
         path: dist
 
-    - name: Create checksums bundle
+    - name: Generate SHA256SUMS
       shell: bash
       run: |
         set -euo pipefail
-        cat dist/*.sha256 > dist/sha256sums.txt
+        cd dist
+        shopt -s nullglob
+        files=(darwin-exporter_*.tar.gz darwin-exporter_dashboard_*.json)
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No release files found to hash"
+          exit 1
+        fi
+        mapfile -t checksum_files < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+        : > SHA256SUMS
+        for f in "${checksum_files[@]}"; do
+          shasum -a 256 "${f}" >> SHA256SUMS
+        done
 
     - name: Publish prerelease
       uses: softprops/action-gh-release@v2
@@ -266,7 +277,7 @@ jobs:
         files: |
           dist/*.tar.gz
           dist/darwin-exporter_dashboard_*.json
-          dist/sha256sums.txt
+          dist/SHA256SUMS
 
   prerelease-push-main:
     if: ${{ needs.prerelease.outputs.tag != '' && needs.prerelease.outputs.commit_created == 'true' }}

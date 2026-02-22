@@ -74,6 +74,20 @@ make install          # installs to ~/.local/bin/darwin-exporter
 make install-service  # installs and starts launchd service (sudo mode)
 ```
 
+### With `go install`
+
+```bash
+# from current repository checkout
+go install .
+
+# from module path
+go install github.com/timansky/darwin-exporter@latest
+# or pin a version
+go install github.com/timansky/darwin-exporter@v1.2.3
+```
+
+Binary is installed to `$(go env GOBIN)` or `$(go env GOPATH)/bin` when `GOBIN` is empty.
+
 ## Usage
 
 ### Run exporter
@@ -92,12 +106,13 @@ darwin-exporter --color=never service status
 ```
 
 Without `-c`, darwin-exporter reads `~/.config/darwin-exporter/config.yml`.
+If the config file is missing, exporter starts with defaults.
 
 ### Service installation modes
 
 `darwin-exporter service install` supports two modes:
 
-1. `--type=sudo`: user LaunchAgent + sudoers rule for passwordless `wdutil/ipconfig/powermetrics`
+1. `sudo` (default): user LaunchAgent + sudoers rule for passwordless `wdutil/ipconfig/powermetrics`
 1. `--type=root`: system LaunchDaemon running as root
 
 Service restart policy in launchd: restart on failure (`KeepAlive.SuccessfulExit=false`).
@@ -106,14 +121,13 @@ Temperature note:
 
 - `darwin_cpu_temperature_celsius`, `darwin_gpu_temperature_celsius`, and `darwin_disk_temperature_celsius` are read from built-in SMC keys.
 - If SMC CPU keys are unavailable, CPU temperature falls back to `powermetrics` (requires root/sudo).
-- `service install --type=sudo` configures sudoers for `wdutil`, `ipconfig`, and `powermetrics`.
+- `service install` configures sudoers for `wdutil`, `ipconfig`, and `powermetrics`.
 
 Examples:
 
 ```bash
 # User mode (recommended for desktop session; default)
 sudo darwin-exporter service install
-sudo darwin-exporter service install --type=sudo
 
 # Root daemon mode
 sudo darwin-exporter service install --type=root
@@ -152,32 +166,32 @@ xattr -dr com.apple.quarantine /absolute/path/to/darwin-exporter
 1. Restart service:
 
 ```bash
-sudo darwin-exporter service restart --type=sudo
+sudo darwin-exporter service restart
 ```
 
 ### Service uninstall
 
 ```bash
 # Remove user mode service + sudoers
-sudo darwin-exporter service uninstall --type=sudo
+sudo darwin-exporter service uninstall
 
 # Remove root daemon service
 sudo darwin-exporter service uninstall --type=root
 
 # Also delete logs/config (when provided)
-sudo darwin-exporter service uninstall --type=sudo --purge --config ~/.config/darwin-exporter/config.yml
+sudo darwin-exporter service uninstall --purge --config ~/.config/darwin-exporter/config.yml
 ```
 
 ### Service lifecycle
 
 ```bash
-sudo darwin-exporter service start --type=sudo
-sudo darwin-exporter service status --type=sudo
-sudo darwin-exporter service logs --type=sudo --lines=100
-sudo darwin-exporter service stop --type=sudo
-sudo darwin-exporter service restart --type=sudo
-sudo darwin-exporter service enable --type=sudo
-sudo darwin-exporter service disable --type=sudo
+sudo darwin-exporter service start
+sudo darwin-exporter service status
+sudo darwin-exporter service logs --lines=100
+sudo darwin-exporter service stop
+sudo darwin-exporter service restart
+sudo darwin-exporter service enable
+sudo darwin-exporter service disable
 ```
 
 ### Shell autocompletion
@@ -247,7 +261,7 @@ Option mapping:
 | `collectors.wifi.enabled` | `--collectors.wifi.enabled` | `DARWIN_EXPORTER_COLLECTORS_WIFI_ENABLED` | bool | `true` |
 | `collectors.battery.enabled` | `--collectors.battery.enabled` | `DARWIN_EXPORTER_COLLECTORS_BATTERY_ENABLED` | bool | `true` |
 | `collectors.thermal.enabled` | `--collectors.thermal.enabled` | `DARWIN_EXPORTER_COLLECTORS_THERMAL_ENABLED` | bool | `true` |
-| `collectors.wdutil.enabled` | `--collectors.wdutil.enabled` | `DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED` | bool | `false` |
+| `collectors.wdutil.enabled` | `--collectors.wdutil.enabled` | `DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED` | bool | `true` |
 | `instance.name` | `--instance.name` | `DARWIN_EXPORTER_INSTANCE_NAME` | string | `""` |
 | `instance.instance_file` | `--instance.instance-file` | `DARWIN_EXPORTER_INSTANCE_INSTANCE_FILE` | string | `""` |
 | `instance.labels` | not supported | `DARWIN_EXPORTER_INSTANCE_LABELS` | JSON map | `{}` |
@@ -281,7 +295,7 @@ collectors:
   thermal:
     enabled: true
   wdutil:
-    enabled: false   # requires root/sudo
+    enabled: true    # full metrics require root/sudo
 
 instance:
   name: ""          # empty: read from ~/.instance
@@ -371,7 +385,7 @@ scripts/grafana-dashboard-sync.sh pull \
 Notes:
 
 - Dashboard combines `node_exporter` metrics (`node_*`) and `darwin-exporter` metrics (`darwin_*`).
-- If Wi-Fi advanced panels are empty, enable `wdutil` collector and install service with `--type=sudo` or `--type=root`.
+- If Wi-Fi advanced panels are empty, enable `wdutil` collector and install service (default `sudo` mode) or use `--type=root`.
 - Current datasource variable defaults to `victoriametrics-metrics-datasource`; adjust it after import if your stack uses another Prometheus-compatible datasource type.
 - `GRAFANA_TOKEN` is org-scoped in Grafana service accounts and is suitable only for single-org sync.
 - If `GRAFANA_ORG_TOKENS` is set, each org from `--org-ids` must be present in the token map.

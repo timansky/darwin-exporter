@@ -60,8 +60,16 @@ func TestLoadWithOverrides_Defaults(t *testing.T) {
 	if !cfg.Collectors.Thermal.Enabled {
 		t.Error("expected thermal collector enabled by default")
 	}
-	if cfg.Collectors.Wdutil.Enabled {
-		t.Error("expected wdutil collector disabled by default")
+	if !cfg.Collectors.Wdutil.Enabled {
+		t.Error("expected wdutil collector enabled by default")
+	}
+}
+
+func TestLoadWithOverrides_MissingCustomPathReturnsError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.yml")
+
+	if _, err := LoadWithOverrides(missing, nil); err == nil {
+		t.Fatal("expected error for missing custom config path")
 	}
 }
 

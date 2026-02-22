@@ -5,14 +5,18 @@ Current CLI guide.
 ## Quick Start
 
 ```bash
-mkdir -p ~/.local/bin
-cp darwin-exporter ~/.local/bin
-chmod +x ~/.local/bin/darwin-exporter
+# install from source checkout
+go install .
 
-./darwin-exporter run
+# or install latest from module path
+go install github.com/timansky/darwin-exporter@latest
 
-~/.local/bin/darwin-exporter service install
+darwin-exporter run
+darwin-exporter service install
 ```
+
+`go install` puts binary to `$(go env GOBIN)` or `$(go env GOPATH)/bin`.
+Add that directory to `PATH` if `darwin-exporter` is not found.
 
 ## Command Model
 
@@ -23,13 +27,13 @@ darwin-exporter [global flags] <command> [subcommand/flags]
 ## Service Lifecycle
 
 ```bash
-sudo darwin-exporter service start --type=sudo
-sudo darwin-exporter service status --type=sudo
-sudo darwin-exporter service logs --type=sudo --lines=100
-sudo darwin-exporter service stop --type=sudo
-sudo darwin-exporter service restart --type=sudo
-sudo darwin-exporter service enable --type=sudo
-sudo darwin-exporter service disable --type=sudo
+sudo darwin-exporter service start
+sudo darwin-exporter service status
+sudo darwin-exporter service logs --lines=100
+sudo darwin-exporter service stop
+sudo darwin-exporter service restart
+sudo darwin-exporter service enable
+sudo darwin-exporter service disable
 ```
 
 `service start` is idempotent: if the service is already running, no restart is performed.
@@ -41,7 +45,7 @@ Default `make build` uses CGo, so these metrics are enabled by default.
 
 Permissions:
 
-- `service install --type=sudo`: sudoers is configured for `wdutil`, `ipconfig`, and `powermetrics`.
+- `service install` (default sudo mode): sudoers is configured for `wdutil`, `ipconfig`, and `powermetrics`.
 - SMC temperature collection does not require sudoers/root.
 
 ## macOS Security Approval (After Install)
@@ -71,7 +75,7 @@ xattr -dr com.apple.quarantine /absolute/path/to/darwin-exporter
 Finally restart service:
 
 ```bash
-sudo darwin-exporter service restart --type=sudo
+sudo darwin-exporter service restart
 ```
 
 Disable colors:
@@ -173,7 +177,7 @@ scripts/grafana-dashboard-sync.sh pull \
 Requirements:
 
 - Metrics from both `node_exporter` and `darwin-exporter`.
-- For advanced Wi-Fi panels (`darwin_wdutil_*`), enable `wdutil` collector and use `service install --type=sudo` or `--type=root`.
+- For advanced Wi-Fi panels (`darwin_wdutil_*`), enable `wdutil` collector and use `service install` (default sudo mode) or `--type=root`.
 
 ## Autocompletion
 

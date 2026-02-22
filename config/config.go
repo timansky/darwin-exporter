@@ -58,7 +58,6 @@ type ThermalCollectorConfig struct {
 }
 
 // WdutilCollectorConfig holds wdutil collector settings.
-// Disabled by default because it requires root or sudoers NOPASSWD.
 type WdutilCollectorConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
@@ -74,7 +73,7 @@ type InstanceConfig struct {
 const DefaultConfigPath = "~/.config/darwin-exporter/config.yml"
 
 // Load reads configuration from a YAML file. If path is empty, returns defaults.
-// If the config file does not exist at the default path, returns defaults without error.
+// If the config file does not exist, returns defaults without error.
 func Load(path string) (*Config, error) {
 	cfg := defaultConfig()
 

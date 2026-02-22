@@ -42,8 +42,8 @@ collectors:
   wdutil:
     # Enable advanced WiFi metrics from wdutil (requires root/sudo).
     # Provides: CCA, NSS, Guard Interval, fault/recovery/link counters
-    # Default: false (requires: darwin-exporter service install --type=sudo)
-    enabled: false
+    # Default: true (full metrics require: darwin-exporter service install --type=sudo)
+    enabled: true
 
 instance:
   # Machine identifier. Default: read from ~/.instance or hostname.
