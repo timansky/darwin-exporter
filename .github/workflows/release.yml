@@ -96,26 +96,35 @@ jobs:
         git push origin "${MAJOR_TAG}"
         echo "Updated major tag: ${MAJOR_TAG}"
 
-    - name: Download prerelease release artifacts
+    - name: Promote prerelease release to stable
       if: ${{ steps.tags.outputs.should_promote == 'true' }}
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: bash
       run: |
         set -euo pipefail
-        rm -rf dist
-        mkdir -p dist
-        gh release download "${{ steps.tags.outputs.beta }}" --dir dist
 
-    - name: Publish stable release from prerelease artifacts
-      if: ${{ steps.tags.outputs.should_promote == 'true' }}
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.tags.outputs.stable }}
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        overwrite_files: true
-        fail_on_unmatched_files: true
-        files: |
-          dist/*
+        BETA_TAG="${{ steps.tags.outputs.beta }}"
+        STABLE_TAG="${{ steps.tags.outputs.stable }}"
+
+        if ! gh release view "${BETA_TAG}" >/dev/null 2>&1; then
+          echo "Prerelease release not found for tag ${BETA_TAG}"
+          exit 1
+        fi
+
+        if gh release view "${STABLE_TAG}" >/dev/null 2>&1; then
+          echo "Stable release already exists for tag ${STABLE_TAG}, cleanup beta release."
+          gh release delete "${BETA_TAG}" --yes --cleanup-tag || true
+          git push origin ":refs/tags/${BETA_TAG}" || true
+          exit 0
+        fi
+
+        gh release edit "${BETA_TAG}" \
+          --tag "${STABLE_TAG}" \
+          --title "${STABLE_TAG}" \
+          --prerelease=false \
+          --latest
+
+        # gh release edit moves release to the stable tag.
+        # Remove leftover beta tag if it still exists.
+        git push origin ":refs/tags/${BETA_TAG}" || true
