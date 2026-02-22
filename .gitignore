@@ -34,9 +34,7 @@ config/darwin-exporter.yml
 # Ignore all dot-directories except .github
 .*/
 !.github/
-!.husky/
-!.husky/**
-.husky/_/
+!.husky/pre-commit
 
 ISSUES.md
 TODO.md
