@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/go-logfmt/logfmt"
 	"github.com/nxadm/tail"
 	plist "howett.net/plist"
@@ -616,7 +617,7 @@ func sinceForPID(pid string) string {
 	if start.After(now) {
 		return "-"
 	}
-	return fmt.Sprintf("%s; %s ago", start.Format("Mon 2006-01-02 15:04:05 -07"), humanizeDuration(now.Sub(start)))
+	return fmt.Sprintf("%s; %s", start.Format("Mon 2006-01-02 15:04:05 -07"), humanize.RelTime(start, now, "ago", "from now"))
 }
 
 func stoppedSince(ts string) string {
@@ -631,7 +632,7 @@ func stoppedSince(ts string) string {
 	if t.After(now) {
 		return "stopped " + t.Format("Mon 2006-01-02 15:04:05 -07")
 	}
-	return fmt.Sprintf("stopped %s; %s ago", t.Format("Mon 2006-01-02 15:04:05 -07"), humanizeDuration(now.Sub(t)))
+	return fmt.Sprintf("stopped %s; %s", t.Format("Mon 2006-01-02 15:04:05 -07"), humanize.RelTime(t, now, "ago", "from now"))
 }
 
 func startedSince(ts string) string {
@@ -646,7 +647,7 @@ func startedSince(ts string) string {
 	if t.After(now) {
 		return t.Format("Mon 2006-01-02 15:04:05 -07")
 	}
-	return fmt.Sprintf("%s; %s ago", t.Format("Mon 2006-01-02 15:04:05 -07"), humanizeDuration(now.Sub(t)))
+	return fmt.Sprintf("%s; %s", t.Format("Mon 2006-01-02 15:04:05 -07"), humanize.RelTime(t, now, "ago", "from now"))
 }
 
 func chooseStartTimestamp(existing string) string {
@@ -654,24 +655,6 @@ func chooseStartTimestamp(existing string) string {
 		return existing
 	}
 	return time.Now().Format(time.RFC3339)
-}
-
-func humanizeDuration(d time.Duration) string {
-	if d < time.Minute {
-		return "0min"
-	}
-	totalMinutes := int(d / time.Minute)
-	days := totalMinutes / (24 * 60)
-	totalMinutes %= 24 * 60
-	hours := totalMinutes / 60
-	minutes := totalMinutes % 60
-	if days > 0 {
-		return fmt.Sprintf("%dd %dh %dmin", days, hours, minutes)
-	}
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dmin", hours, minutes)
-	}
-	return fmt.Sprintf("%dmin", minutes)
 }
 
 type serviceLogPaths struct {
@@ -963,20 +946,6 @@ func styleLogfmtLine(line string, source logSource) string {
 	return line
 }
 
-func styleLogfmtToken(token string, source logSource) string {
-	eq := strings.IndexByte(token, '=')
-	if eq <= 0 {
-		return styleBareLogToken(token, source)
-	}
-
-	key := token[:eq]
-	val := token[eq+1:]
-	if isLevelKey(key) {
-		return styleLevelToken(token, val)
-	}
-	return styleKey(key) + "=" + styleLogValueByKey(key, val, source)
-}
-
 func styleJSONLogLine(line string, source logSource) string {
 	var b strings.Builder
 	lastKey := ""
@@ -1057,26 +1026,6 @@ func isLevelKey(key string) bool {
 	}
 }
 
-func styleLevelToken(token, val string) string {
-	key := token
-	if eq := strings.IndexByte(token, '='); eq > 0 {
-		key = token[:eq]
-	}
-	level := strings.TrimSpace(strings.Trim(strings.ToLower(val), `"'`))
-	switch level {
-	case "panic", "fatal", "error":
-		return styleKey(key) + "=" + styleError(val)
-	case "warn", "warning":
-		return styleKey(key) + "=" + styleWarn(val)
-	case "info":
-		return styleKey(key) + "=" + styleInfo(val)
-	case "debug", "trace":
-		return styleKey(key) + "=" + styleKey(val)
-	default:
-		return styleKey(key) + "=" + val
-	}
-}
-
 func styleLevelValue(val string) string {
 	level := strings.TrimSpace(strings.Trim(strings.ToLower(val), `"'`))
 	switch level {
@@ -1091,24 +1040,6 @@ func styleLevelValue(val string) string {
 	default:
 		return val
 	}
-}
-
-func styleBareLogToken(token string, source logSource) string {
-	t := strings.TrimSpace(strings.ToLower(token))
-	switch t {
-	case "panic", "panic:", "fatal", "fatal:", "error", "error:":
-		return styleError(token)
-	case "warn", "warn:", "warning", "warning:":
-		return styleWarn(token)
-	case "info", "info:":
-		return styleInfo(token)
-	case "debug", "debug:", "trace", "trace:":
-		return styleKey(token)
-	}
-	if source == logSourceStderr {
-		return styleError(token)
-	}
-	return token
 }
 
 func containsAny(s string, needles ...string) bool {

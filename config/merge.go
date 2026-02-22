@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	koanfenv "github.com/knadh/koanf/providers/env/v2"
+	"github.com/knadh/koanf/v2"
 )
 
 func loadLabelsFromEnv(raw string) (map[string]string, error) {
@@ -16,77 +20,154 @@ func loadLabelsFromEnv(raw string) (map[string]string, error) {
 	return labels, nil
 }
 
+var envVarToConfigPath = map[string]string{
+	"DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS":      "server.listen_address",
+	"DARWIN_EXPORTER_SERVER_METRICS_PATH":        "server.metrics_path",
+	"DARWIN_EXPORTER_SERVER_HEALTH_PATH":         "server.health_path",
+	"DARWIN_EXPORTER_SERVER_READY_PATH":          "server.ready_path",
+	"DARWIN_EXPORTER_SERVER_READ_TIMEOUT":        "server.read_timeout",
+	"DARWIN_EXPORTER_SERVER_WRITE_TIMEOUT":       "server.write_timeout",
+	"DARWIN_EXPORTER_LOGGING_LEVEL":              "logging.level",
+	"DARWIN_EXPORTER_LOGGING_FORMAT":             "logging.format",
+	"DARWIN_EXPORTER_COLOR":                      "color",
+	"DARWIN_EXPORTER_COLLECTORS_WIFI_ENABLED":    "collectors.wifi.enabled",
+	"DARWIN_EXPORTER_COLLECTORS_BATTERY_ENABLED": "collectors.battery.enabled",
+	"DARWIN_EXPORTER_COLLECTORS_THERMAL_ENABLED": "collectors.thermal.enabled",
+	"DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED":  "collectors.wdutil.enabled",
+	"DARWIN_EXPORTER_INSTANCE_NAME":              "instance.name",
+	"DARWIN_EXPORTER_INSTANCE_INSTANCE_FILE":     "instance.instance_file",
+	"DARWIN_EXPORTER_INSTANCE_LABELS":            "instance.labels",
+}
+
+func hasKnownEnvOverrides() bool {
+	for envName := range envVarToConfigPath {
+		if _, ok := os.LookupEnv(envName); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func fallbackStringOverride(cfg *Config, envName string) string {
+	switch envName {
+	case "DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS":
+		return cfg.Server.ListenAddress
+	case "DARWIN_EXPORTER_SERVER_METRICS_PATH":
+		return cfg.Server.MetricsPath
+	case "DARWIN_EXPORTER_SERVER_HEALTH_PATH":
+		return cfg.Server.HealthPath
+	case "DARWIN_EXPORTER_SERVER_READY_PATH":
+		return cfg.Server.ReadyPath
+	case "DARWIN_EXPORTER_LOGGING_LEVEL":
+		return cfg.Logging.Level
+	case "DARWIN_EXPORTER_LOGGING_FORMAT":
+		return cfg.Logging.Format
+	case "DARWIN_EXPORTER_COLOR":
+		return cfg.Color
+	case "DARWIN_EXPORTER_INSTANCE_NAME":
+		return cfg.Instance.Name
+	case "DARWIN_EXPORTER_INSTANCE_INSTANCE_FILE":
+		return cfg.Instance.InstanceFile
+	default:
+		return ""
+	}
+}
+
+func fallbackBoolOverride(cfg *Config, envName string) bool {
+	switch envName {
+	case "DARWIN_EXPORTER_COLLECTORS_WIFI_ENABLED":
+		return cfg.Collectors.WiFi.Enabled
+	case "DARWIN_EXPORTER_COLLECTORS_BATTERY_ENABLED":
+		return cfg.Collectors.Battery.Enabled
+	case "DARWIN_EXPORTER_COLLECTORS_THERMAL_ENABLED":
+		return cfg.Collectors.Thermal.Enabled
+	case "DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED":
+		return cfg.Collectors.Wdutil.Enabled
+	default:
+		return false
+	}
+}
+
+func transformEnvVar(cfg *Config, labelsOverride map[string]string, envName, rawValue string) (string, any) {
+	path, ok := envVarToConfigPath[envName]
+	if !ok {
+		key := strings.TrimPrefix(envName, "DARWIN_EXPORTER_")
+		key = strings.ToLower(strings.ReplaceAll(key, "_", "."))
+		return key, rawValue
+	}
+
+	switch envName {
+	case "DARWIN_EXPORTER_SERVER_READ_TIMEOUT":
+		if d, err := time.ParseDuration(rawValue); err == nil {
+			return path, d
+		}
+		return path, cfg.Server.ReadTimeout
+	case "DARWIN_EXPORTER_SERVER_WRITE_TIMEOUT":
+		if d, err := time.ParseDuration(rawValue); err == nil {
+			return path, d
+		}
+		return path, cfg.Server.WriteTimeout
+	case "DARWIN_EXPORTER_COLLECTORS_WIFI_ENABLED",
+		"DARWIN_EXPORTER_COLLECTORS_BATTERY_ENABLED",
+		"DARWIN_EXPORTER_COLLECTORS_THERMAL_ENABLED",
+		"DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED":
+		if b, err := strconv.ParseBool(rawValue); err == nil {
+			return path, b
+		}
+		return path, fallbackBoolOverride(cfg, envName)
+	case "DARWIN_EXPORTER_INSTANCE_LABELS":
+		if labelsOverride != nil {
+			return path, labelsOverride
+		}
+		return path, cfg.Instance.Labels
+	case "DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS",
+		"DARWIN_EXPORTER_SERVER_METRICS_PATH",
+		"DARWIN_EXPORTER_SERVER_HEALTH_PATH",
+		"DARWIN_EXPORTER_SERVER_READY_PATH",
+		"DARWIN_EXPORTER_LOGGING_LEVEL",
+		"DARWIN_EXPORTER_LOGGING_FORMAT",
+		"DARWIN_EXPORTER_COLOR",
+		"DARWIN_EXPORTER_INSTANCE_NAME",
+		"DARWIN_EXPORTER_INSTANCE_INSTANCE_FILE":
+		if rawValue == "" {
+			return path, fallbackStringOverride(cfg, envName)
+		}
+		return path, rawValue
+	default:
+		return path, rawValue
+	}
+}
+
 func applyEnvOverrides(cfg *Config) error {
 	if cfg == nil {
 		return nil
 	}
 
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS"); ok && v != "" {
-		cfg.Server.ListenAddress = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_METRICS_PATH"); ok && v != "" {
-		cfg.Server.MetricsPath = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_HEALTH_PATH"); ok && v != "" {
-		cfg.Server.HealthPath = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_READY_PATH"); ok && v != "" {
-		cfg.Server.ReadyPath = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_READ_TIMEOUT"); ok {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.Server.ReadTimeout = d
-		}
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_SERVER_WRITE_TIMEOUT"); ok {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.Server.WriteTimeout = d
-		}
+	if !hasKnownEnvOverrides() {
+		return nil
 	}
 
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_LOGGING_LEVEL"); ok && v != "" {
-		cfg.Logging.Level = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_LOGGING_FORMAT"); ok && v != "" {
-		cfg.Logging.Format = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_COLOR"); ok && v != "" {
-		cfg.Color = v
-	}
-
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_COLLECTORS_WIFI_ENABLED"); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.Collectors.WiFi.Enabled = b
-		}
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_COLLECTORS_BATTERY_ENABLED"); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.Collectors.Battery.Enabled = b
-		}
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_COLLECTORS_THERMAL_ENABLED"); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.Collectors.Thermal.Enabled = b
-		}
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_COLLECTORS_WDUTIL_ENABLED"); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.Collectors.Wdutil.Enabled = b
-		}
-	}
-
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_INSTANCE_NAME"); ok && v != "" {
-		cfg.Instance.Name = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_INSTANCE_INSTANCE_FILE"); ok && v != "" {
-		cfg.Instance.InstanceFile = v
-	}
-	if v, ok := os.LookupEnv("DARWIN_EXPORTER_INSTANCE_LABELS"); ok && v != "" {
-		labels, err := loadLabelsFromEnv(v)
+	var labelsOverride map[string]string
+	if raw, ok := os.LookupEnv("DARWIN_EXPORTER_INSTANCE_LABELS"); ok && raw != "" {
+		labels, err := loadLabelsFromEnv(raw)
 		if err != nil {
 			return err
 		}
-		cfg.Instance.Labels = labels
+		labelsOverride = labels
+	}
+
+	k := koanf.New(".")
+	if err := k.Load(koanfenv.Provider(".", koanfenv.Opt{
+		Prefix: "DARWIN_EXPORTER_",
+		TransformFunc: func(envName, rawValue string) (string, any) {
+			return transformEnvVar(cfg, labelsOverride, envName, rawValue)
+		},
+	}), nil); err != nil {
+		return fmt.Errorf("loading environment overrides: %w", err)
+	}
+
+	if err := unmarshalConfigWithKoanf(k, cfg); err != nil {
+		return err
 	}
 
 	return nil

@@ -11,7 +11,7 @@ Up-to-date CLI examples and scenarios: `USAGE.md`.
 ### WiFi (`darwin_wifi_*`)
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | `darwin_wifi_rssi_dbm` | Gauge | Signal strength (dBm) |
 | `darwin_wifi_noise_dbm` | Gauge | Noise level (dBm) |
 | `darwin_wifi_snr_db` | Gauge | Signal-to-noise ratio (dBm) |
@@ -23,7 +23,7 @@ Up-to-date CLI examples and scenarios: `USAGE.md`.
 ### Battery (`darwin_battery_*`)
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | `darwin_battery_cycle_count` | Gauge | Charge cycle count |
 | `darwin_battery_health_percent` | Gauge | Health (MaxCapacity/DesignCapacity * 100) |
 | `darwin_battery_voltage_volts` | Gauge | Voltage (V) |
@@ -34,7 +34,7 @@ Battery level/charging/current/time/power source come from `node_exporter` (`nod
 ### Thermal (`darwin_thermal_*`)
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | `darwin_thermal_pressure` | Gauge | Thermal pressure state (label: nominal/fair/serious/critical) |
 | `darwin_cpu_temperature_celsius` | Gauge | CPU temperature (best effort via built-in SMC, fallback `powermetrics`) |
 | `darwin_gpu_temperature_celsius` | Gauge | GPU temperature (best effort via built-in SMC keys) |
@@ -45,7 +45,7 @@ Battery level/charging/current/time/power source come from `node_exporter` (`nod
 Advanced WiFi metrics from `wdutil` (requires root/sudo privileges).
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | `darwin_wdutil_available` | Gauge | 1 if `wdutil` access is available, otherwise 0 |
 | `darwin_wdutil_wifi_cca_percent` | Gauge | Channel utilization (CCA, %) |
 | `darwin_wdutil_wifi_nss` | Gauge | Number of spatial streams |
@@ -234,7 +234,7 @@ DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS=127.0.0.1:9090 \
 Option mapping:
 
 | YAML | CLI flag | ENV variable | Type | Default |
-|------|----------|--------------|------|---------|
+| ---- | -------- | ------------ | ---- | ------- |
 | `server.listen_address` | `--server.listen-address` | `DARWIN_EXPORTER_SERVER_LISTEN_ADDRESS` | string | `127.0.0.1:10102` |
 | `server.metrics_path` | `--server.metrics-path` | `DARWIN_EXPORTER_SERVER_METRICS_PATH` | string | `/metrics` |
 | `server.health_path` | `--server.health-path` | `DARWIN_EXPORTER_SERVER_HEALTH_PATH` | string | `/health` |

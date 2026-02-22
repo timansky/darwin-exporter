@@ -4,10 +4,10 @@
 
 For this project stage, security fixes are applied to `main` only.
 
-| Version | Supported |
-|---------|-----------|
-| `main` | yes |
-| tags / older commits | no |
+| Version              | Supported |
+| -------------------- | --------- |
+| `main`               | yes       |
+| tags / older commits | no        |
 
 ## Reporting a Vulnerability
 

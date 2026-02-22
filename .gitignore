@@ -6,6 +6,7 @@ darwin-exporter
 *.a
 *.so
 dist/
+node_modules/
 
 # Test artifacts
 *.test
@@ -33,6 +34,9 @@ config/darwin-exporter.yml
 # Ignore all dot-directories except .github
 .*/
 !.github/
+!.husky/
+!.husky/**
+.husky/_/
 
 ISSUES.md
 TODO.md

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running markdownlint and golangci-lint..."
+make lint
+
+echo "Running yamllint..."
+yamllint -c .yamllint .
+
+echo "Running go vet..."
+go vet ./...
+
+echo "Running go test..."
+go test ./...

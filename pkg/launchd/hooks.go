@@ -2,8 +2,6 @@
 
 package launchd
 
-import "fmt"
-
 // Hooks defines optional callbacks for user-visible messages.
 // All callbacks are optional; nil callbacks are ignored.
 type Hooks struct {
@@ -73,28 +71,4 @@ func (h Hooks) styleSuccess(s string) string {
 		return h.StyleSuccess(s)
 	}
 	return s
-}
-
-func (h Hooks) printf(format string, args ...any) {
-	if h.Printf != nil {
-		h.Printf(format, args...)
-		return
-	}
-	fmt.Printf(format, args...)
-}
-
-func (h Hooks) println(args ...any) {
-	if h.Println != nil {
-		h.Println(args...)
-		return
-	}
-	fmt.Println(args...)
-}
-
-func (h Hooks) print(args ...any) {
-	if h.Print != nil {
-		h.Print(args...)
-		return
-	}
-	fmt.Print(args...)
 }

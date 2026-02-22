@@ -11,7 +11,7 @@ LDFLAGS := -X $(MODULE)/version.Version=$(VERSION) \
 GO      := go
 GOFLAGS :=
 
-.PHONY: all build run test test-race lint fmt vet clean \
+.PHONY: all build run test test-race lint lint-md lint-go fmt vet clean \
         install install-service uninstall-service \
         completion-bash completion-zsh install-completion-bash install-completion-zsh \
         version release
@@ -34,8 +34,15 @@ test:
 test-race:
 	$(GO) test -race -v ./...
 
-## lint: Run golangci-lint
-lint:
+## lint: Run markdownlint and golangci-lint
+lint: lint-md lint-go
+
+## lint-md: Run markdownlint
+lint-md:
+	npm run --silent lint:md
+
+## lint-go: Run golangci-lint
+lint-go:
 	golangci-lint run ./...
 
 ## fmt: Format all Go source files
