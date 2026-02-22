@@ -45,18 +45,28 @@ jobs:
         set -euo pipefail
 
         TAG="${INPUT_TAG}"
+        SHOULD_PROMOTE="true"
         if [ -z "${TAG}" ]; then
           if [ "${EVENT_NAME}" = "push" ]; then
             TAG="${REF_NAME}"
           else
             git fetch --tags --prune
-            TAG="$(git tag --list 'v*-beta' --sort=-v:refname | head -n1)"
+            while IFS= read -r CANDIDATE; do
+              [ -n "${CANDIDATE}" ] || continue
+              STABLE_CANDIDATE="${CANDIDATE%-beta}"
+              if ! git ls-remote --exit-code --tags origin "refs/tags/${STABLE_CANDIDATE}" >/dev/null 2>&1; then
+                TAG="${CANDIDATE}"
+                break
+              fi
+            done < <(git tag --list 'v*-beta' --sort=-v:refname)
           fi
         fi
 
         if [ -z "${TAG}" ]; then
-          echo "No prerelease tag provided or found"
-          exit 1
+          echo "No promotable prerelease tag found. All beta tags already have matching stable tags."
+          echo "Workflow finished with skip."
+          echo "should_promote=false" >> "${GITHUB_OUTPUT}"
+          exit 0
         fi
 
         if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta$ ]]; then
@@ -67,17 +77,20 @@ jobs:
         STABLE_TAG="${TAG%-beta}"
         MAJOR_TAG="v$(echo "${STABLE_TAG#v}" | cut -d. -f1)"
 
+        echo "should_promote=${SHOULD_PROMOTE}" >> "${GITHUB_OUTPUT}"
         echo "beta=${TAG}" >> "${GITHUB_OUTPUT}"
         echo "stable=${STABLE_TAG}" >> "${GITHUB_OUTPUT}"
         echo "major=${MAJOR_TAG}" >> "${GITHUB_OUTPUT}"
 
     - name: Checkout prerelease tag
+      if: ${{ steps.tags.outputs.should_promote == 'true' }}
       uses: actions/checkout@v6
       with:
         ref: ${{ steps.tags.outputs.beta }}
         fetch-depth: 0
 
     - name: Create and push stable tags
+      if: ${{ steps.tags.outputs.should_promote == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -99,6 +112,7 @@ jobs:
         echo "Updated major tag: ${MAJOR_TAG}"
 
     - name: Trigger release workflow for stable tag
+      if: ${{ steps.tags.outputs.should_promote == 'true' }}
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       shell: bash

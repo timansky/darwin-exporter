@@ -74,16 +74,37 @@ jobs:
           fi
         fi
 
-        LATEST_TAG="$(git tag -l "v${BASE_MAJOR_MINOR}.*" --sort=-v:refname | head -1 || true)"
-        if [ -z "${LATEST_TAG}" ]; then
-          PATCH=0
-        else
-          PATCH="$(echo "${LATEST_TAG}" | sed "s/^v${BASE_MAJOR_MINOR}\.//" | sed 's/-.*//')"
-          PATCH=$((PATCH + 1))
+        CURRENT_BETA_TAG="$(git tag -l "v${BASE_MAJOR_MINOR}.*-beta" --sort=-v:refname | head -1 || true)"
+        if [ -n "${CURRENT_BETA_TAG}" ]; then
+          CURRENT_STABLE_TAG="${CURRENT_BETA_TAG%-beta}"
+          if git rev-parse -q --verify "refs/tags/${CURRENT_STABLE_TAG}" >/dev/null; then
+            CURRENT_BETA_TAG=""
+          fi
         fi
 
-        NEW_VERSION="${BASE_MAJOR_MINOR}.${PATCH}"
-        NEW_TAG="v${NEW_VERSION}-beta"
+        if [ -n "${CURRENT_BETA_TAG}" ]; then
+          NEW_TAG="${CURRENT_BETA_TAG}"
+          NEW_VERSION="${NEW_TAG#v}"
+          NEW_VERSION="${NEW_VERSION%-beta}"
+        else
+          LATEST_STABLE_TAG="$(
+            git tag -l "v${BASE_MAJOR_MINOR}.*" --sort=-v:refname \
+            | grep -E '^[^-]+$' \
+            | head -1 \
+            || true
+          )"
+
+          if [ -z "${LATEST_STABLE_TAG}" ]; then
+            PATCH=0
+          else
+            VERSION_NO_PREFIX="${LATEST_STABLE_TAG#v}"
+            PATCH="${VERSION_NO_PREFIX##*.}"
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="${BASE_MAJOR_MINOR}.${PATCH}"
+          NEW_TAG="v${NEW_VERSION}-beta"
+        fi
 
         echo "version=${NEW_VERSION}" >> "${GITHUB_OUTPUT}"
         echo "tag=${NEW_TAG}" >> "${GITHUB_OUTPUT}"
