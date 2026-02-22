@@ -21,9 +21,7 @@ concurrency:
     - "**.md"
     - "docs/**"
     - ".claude/**"
-    - ".github/workflows/ci.yml"
-    - ".github/workflows/release.yml"
-    - ".github/workflows/promote-release.yml"
+    - ".github/workflows/**"
     - ".gitignore"
     - "Makefile"
 
