@@ -139,7 +139,7 @@ jobs:
     runs-on: macos-latest
     env:
       RELEASE_TAG: ${{ needs.prerelease.outputs.tag }}
-      RELEASE_VERSION: ${{ replace(needs.prerelease.outputs.tag, '-beta', '') }}
+      RELEASE_VERSION: ${{ needs.prerelease.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ needs.prerelease.outputs.tag }}
-      RELEASE_VERSION: ${{ replace(needs.prerelease.outputs.tag, '-beta', '') }}
+      RELEASE_VERSION: ${{ needs.prerelease.outputs.version }}
 
     steps:
     - name: Checkout

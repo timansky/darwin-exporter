@@ -10,6 +10,9 @@ concurrency:
 'on':
   workflow_call:
     outputs:
+      version:
+        description: "Generated prerelease base version"
+        value: ${{ jobs.prerelease.outputs.version }}
       tag:
         description: "Generated prerelease tag"
         value: ${{ jobs.prerelease.outputs.tag }}
@@ -22,6 +25,7 @@ jobs:
   prerelease:
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
     - name: Checkout
