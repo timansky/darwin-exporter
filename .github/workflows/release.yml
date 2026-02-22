@@ -74,10 +74,41 @@ jobs:
           darwin-exporter_${{ env.RELEASE_TAG }}_darwin_${{ matrix.goarch }}.tar.gz
           darwin-exporter_${{ env.RELEASE_TAG }}_darwin_${{ matrix.goarch }}.sha256
 
+  dashboard:
+    name: Build dashboard artifact
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ env.RELEASE_TAG }}
+
+    - name: Build versioned dashboard artifact
+      run: |
+        set -euo pipefail
+        OUT="darwin-exporter_dashboard_${RELEASE_TAG}.json"
+        jq --arg tag "${RELEASE_TAG}" '
+          .id = null
+          | .description = ((.description // "") | gsub(" \\| release [^|]+$"; "") + " | release " + $tag)
+          | .tags = (((.tags // []) | map(select(startswith("release:") | not))) + ["release:" + $tag])
+        ' docs/grafana/dashboard.json > "${OUT}"
+        shasum -a 256 "${OUT}" > "${OUT}.sha256"
+
+    - name: Upload dashboard artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: release-dashboard
+        path: |
+          darwin-exporter_dashboard_${{ env.RELEASE_TAG }}.json
+          darwin-exporter_dashboard_${{ env.RELEASE_TAG }}.json.sha256
+
   publish:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+    - build
+    - dashboard
     permissions:
       contents: write
 
@@ -116,8 +147,14 @@ jobs:
         set -euo pipefail
         shopt -s nullglob
         TAR_FILES=(dist/*.tar.gz)
+        DASHBOARD_FILES=(dist/darwin-exporter_dashboard_*.json)
         if (( ${#TAR_FILES[@]} == 0 )); then
           echo "No release archives found in dist/. Build artifacts were not downloaded."
+          ls -la dist || true
+          exit 1
+        fi
+        if (( ${#DASHBOARD_FILES[@]} == 0 )); then
+          echo "No dashboard artifacts found in dist/. Dashboard artifact was not downloaded."
           ls -la dist || true
           exit 1
         fi
@@ -125,6 +162,7 @@ jobs:
         if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
           gh release upload "${RELEASE_TAG}" \
             "${TAR_FILES[@]}" \
+            "${DASHBOARD_FILES[@]}" \
             dist/sha256sums.txt#sha256sums.txt \
             --clobber
           exit 0
@@ -140,4 +178,5 @@ jobs:
           --generate-notes \
           "${EXTRA_ARGS[@]}" \
           "${TAR_FILES[@]}" \
+          "${DASHBOARD_FILES[@]}" \
           dist/sha256sums.txt#sha256sums.txt

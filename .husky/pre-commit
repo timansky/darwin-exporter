@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Running markdownlint and golangci-lint..."
+echo "Running markdownlint, eslint, and golangci-lint..."
 make lint
 
 echo "Running yamllint..."

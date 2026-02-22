@@ -327,11 +327,55 @@ Import steps:
 1. Select your metrics datasource in the `Data Source` variable.
 1. Pick `Instance` and `Disk device` from dashboard variables.
 
+Dashboard sync script (multi-org):
+
+- Script: `scripts/grafana-dashboard-sync.sh`
+- Auth: `GRAFANA_USER` + `GRAFANA_PASS` or `GRAFANA_ORG_TOKENS="1=... 2=..."`
+
+Push dashboard to multiple orgs:
+
+```bash
+export GRAFANA_USER=reader
+export GRAFANA_PASS=pass
+
+scripts/grafana-dashboard-sync.sh push \
+  --url https://grafana.example.com \
+  --org-ids "1 2 3" \
+  --dashboard docs/grafana/dashboard.json
+```
+
+Push with service account tokens (per-org):
+
+```bash
+export GRAFANA_ORG_TOKENS="1=token_org1 2=token_org2 3=token_org3"
+
+scripts/grafana-dashboard-sync.sh push \
+  --url https://grafana.example.com \
+  --org-ids "1 2 3" \
+  --dashboard docs/grafana/dashboard.json
+```
+
+Pull dashboard back from source org to local JSON (reverse sync):
+
+```bash
+export GRAFANA_USER=reader
+export GRAFANA_PASS=pass
+
+scripts/grafana-dashboard-sync.sh pull \
+  --url https://grafana.example.com \
+  --get-org-id 1 \
+  --uid darwin-exporter-overview \
+  --dashboard docs/grafana/dashboard.json
+```
+
 Notes:
 
 - Dashboard combines `node_exporter` metrics (`node_*`) and `darwin-exporter` metrics (`darwin_*`).
 - If Wi-Fi advanced panels are empty, enable `wdutil` collector and install service with `--type=sudo` or `--type=root`.
 - Current datasource variable defaults to `victoriametrics-metrics-datasource`; adjust it after import if your stack uses another Prometheus-compatible datasource type.
+- `GRAFANA_TOKEN` is org-scoped in Grafana service accounts and is suitable only for single-org sync.
+- If `GRAFANA_ORG_TOKENS` is set, each org from `--org-ids` must be present in the token map.
+- Push requires stable dashboard `uid`; otherwise Grafana creates new dashboards.
 
 ## Endpoints
 

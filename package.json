@@ -3,10 +3,14 @@
   "private": true,
   "scripts": {
     "prepare": "husky",
-    "lint:md": "markdownlint \"**/*.md\" --ignore node_modules --ignore vendor --ignore .husky/_"
+    "lint:md": "markdownlint \"**/*.md\" --ignore node_modules --ignore vendor --ignore .husky/_",
+    "lint:grafana": "eslint docs/grafana/dashboard.json"
   },
   "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-jsonc": "^2.20.0",
     "husky": "^9.1.7",
+    "jsonc-eslint-parser": "^2.4.1",
     "markdownlint-cli": "^0.47.0"
   }
 }

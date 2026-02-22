@@ -16,14 +16,14 @@ concurrency:
   push:
     branches:
     - main
-    paths-ignore:
+    # Run prerelease only for release-relevant changes.
+    # Everything else on main is ignored.
+    paths:
     - "VERSION"
-    - "**.md"
-    - "docs/**"
-    - ".claude/**"
-    - ".github/workflows/**"
-    - ".gitignore"
-    - "Makefile"
+    - "go.mod"
+    - "go.sum"
+    - "**/*.go"
+    - "docs/grafana/dashboard.json"
 
 permissions:
   actions: write

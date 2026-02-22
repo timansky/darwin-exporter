@@ -30,6 +30,9 @@ vendor/
 
 # Local config (use .example)
 config/darwin-exporter.yml
+.env
+.env.*
+!.env-example
 
 # Ignore all dot-directories except .github
 .*/
