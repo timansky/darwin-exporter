@@ -126,7 +126,7 @@ jobs:
 
     - name: Upload CI artifacts
       if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: ci-${{ github.event_name }}-${{ github.run_number }}
         retention-days: 14
@@ -188,7 +188,7 @@ jobs:
         tar -czf "${OUT}.tar.gz" "${OUT}" LICENSE README.md
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: prerelease-${{ matrix.goarch }}
         path: |
@@ -221,7 +221,7 @@ jobs:
         ' docs/grafana/dashboard.json > "${OUT}"
 
     - name: Upload dashboard artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: prerelease-dashboard
         path: |
